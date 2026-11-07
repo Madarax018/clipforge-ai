@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 from clipforge.main import app
-
+from clipforge.worker import JobStatus, VideoJob
 client = TestClient(app)
 
 
@@ -114,3 +114,33 @@ def test_reject_youtube_url_as_direct_source():
     )
 
     assert response.status_code == 422
+    def test_video_job_defaults():
+    job = VideoJob(
+        job_id="test-001",
+        video_url="https://example.com/video.mp4",
+        source="direct"
+    )
+
+    assert job.status == JobStatus.QUEUED
+    assert job.duration == 45
+    assert job.result_url is None
+    assert job.error is None
+
+
+def test_video_job_custom_duration():
+    job = VideoJob(
+        job_id="test-002",
+        video_url="https://youtube.com/watch?v=abc123",
+        source="youtube",
+        duration=60
+    )
+
+    assert job.duration == 60
+    assert job.source == "youtube"
+
+
+def test_video_job_status_values():
+    assert JobStatus.QUEUED == "queued"
+    assert JobStatus.PROCESSING == "processing"
+    assert JobStatus.COMPLETED == "completed"
+    assert JobStatus.FAILED == "failed"
