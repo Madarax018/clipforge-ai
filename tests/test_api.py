@@ -156,3 +156,97 @@ def test_video_job_status_values():
     assert JobStatus.PROCESSING == "processing"
     assert JobStatus.COMPLETED == "completed"
     assert JobStatus.FAILED == "failed"
+from clipforge.worker import (
+    create_job,
+    update_job_status,
+)
+
+
+def test_job_moves_to_processing():
+    job = create_job(
+        "https://example.com/video.mp4",
+        "direct",
+        45,
+    )
+
+    updated = update_job_status(
+        job.job_id,
+        JobStatus.PROCESSING,
+    )
+
+    assert updated.status == JobStatus.PROCESSING
+
+
+def test_job_moves_to_completed():
+    job = create_job(
+        "https://example.com/video.mp4",
+        "direct",
+        45,
+    )
+
+    update_job_status(job.job_id, JobStatus.PROCESSING)
+
+    updated = update_job_status(
+        job.job_id,
+        JobStatus.COMPLETED,
+        result_url="https://example.com/result.mp4",
+    )
+
+    assert updated.status == JobStatus.COMPLETED
+    assert updated.result_url == "https://example.com/result.mp4"
+
+
+def test_job_moves_to_failed():
+    job = create_job(
+        "https://example.com/video.mp4",
+        "direct",
+        45,
+    )
+
+    update_job_status(job.job_id, JobStatus.PROCESSING)
+
+    updated = update_job_status(
+        job.job_id,
+        JobStatus.FAILED,
+        error="Test processing failure",
+    )
+
+    assert updated.status == JobStatus.FAILED
+    assert updated.error == "Test processing failure"
+
+
+def test_reject_invalid_job_transition():
+    job = create_job(
+        "https://example.com/video.mp4",
+        "direct",
+        45,
+    )
+
+    with pytest.raises(ValueError):
+        update_job_status(job.job_id, JobStatus.COMPLETED)
+
+
+def test_completed_job_requires_result_url():
+    job = create_job(
+        "https://example.com/video.mp4",
+        "direct",
+        45,
+    )
+
+    update_job_status(job.job_id, JobStatus.PROCESSING)
+
+    with pytest.raises(ValueError):
+        update_job_status(job.job_id, JobStatus.COMPLETED)
+
+
+def test_failed_job_requires_error():
+    job = create_job(
+        "https://example.com/video.mp4",
+        "direct",
+        45,
+    )
+
+    update_job_status(job.job_id, JobStatus.PROCESSING)
+
+    with pytest.raises(ValueError):
+        update_job_status(job.job_id, JobStatus.FAILED)
