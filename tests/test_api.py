@@ -2,15 +2,25 @@ import pytest
 from fastapi.testclient import TestClient
 
 from clipforge.main import app
-from clipforge.worker import JobStatus, VideoJob, _jobs
+from clipforge import worker
+from clipforge.worker import (
+    JobStatus,
+    VideoJob,
+    create_job,
+    update_job_status,
+)
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
 def reset_jobs():
-    _jobs.clear()
+    with worker._lock:
+        worker._jobs.clear()
+        worker._active_job_id = None
 
+
+# API tests
 
 def test_home():
     response = client.get("/")
@@ -126,6 +136,8 @@ def test_only_one_active_job_allowed():
     assert second.status_code == 409
 
 
+# Video job model tests
+
 def test_video_job_defaults():
     job = VideoJob(
         job_id="test-001",
@@ -156,11 +168,9 @@ def test_video_job_status_values():
     assert JobStatus.PROCESSING == "processing"
     assert JobStatus.COMPLETED == "completed"
     assert JobStatus.FAILED == "failed"
-from clipforge.worker import (
-    create_job,
-    update_job_status,
-)
 
+
+# Worker lifecycle tests
 
 def test_job_moves_to_processing():
     job = create_job(
