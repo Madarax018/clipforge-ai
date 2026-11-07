@@ -1,5 +1,8 @@
 from enum import Enum
-from pydantic import BaseModel
+from threading import Lock
+from uuid import uuid4
+
+from pydantic import BaseModel, Field
 
 
 class JobStatus(str, Enum):
@@ -13,19 +16,49 @@ class VideoJob(BaseModel):
     job_id: str
     video_url: str
     source: str
-    duration: int = 45
+    duration: int = Field(default=45, ge=15, le=180)
     status: JobStatus = JobStatus.QUEUED
     result_url: str | None = None
     error: str | None = None
 
 
-def process_video(job: VideoJob) -> VideoJob:
-    """
-    Processing entry point.
+_jobs: dict[str, VideoJob] = {}
+_active_job_id: str | None = None
+_lock = Lock()
 
-    Actual video downloading, transcription and
-    rendering will be implemented in later stages.
-    """
+
+def create_job(video_url: str, source: str, duration: int) -> VideoJob:
+    global _active_job_id
+
+    with _lock:
+        if _active_job_id is not None:
+            active = _jobs.get(_active_job_id)
+
+            if active and active.status in (
+                JobStatus.QUEUED,
+                JobStatus.PROCESSING,
+            ):
+                raise RuntimeError("A video job is already active")
+
+        job = VideoJob(
+            job_id=str(uuid4()),
+            video_url=video_url,
+            source=source,
+            duration=duration,
+        )
+
+        _jobs[job.job_id] = job
+        _active_job_id = job.job_id
+
+        return job
+
+
+def get_job(job_id: str) -> VideoJob | None:
+    with _lock:
+        return _jobs.get(job_id)
+
+
+def process_video(job: VideoJob) -> VideoJob:
     raise NotImplementedError(
-        "Video processing worker is not implemented yet."
+        "Video processing is not implemented yet."
     )
