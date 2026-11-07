@@ -1,7 +1,7 @@
 from typing import Literal
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import (
     BaseModel,
     Field,
@@ -10,10 +10,12 @@ from pydantic import (
     model_validator,
 )
 
+from clipforge.worker import create_job, get_job
+
 app = FastAPI(
     title="ClipForge AI",
     description="Cloud-based AI video clipping API",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 
@@ -42,10 +44,7 @@ class ClipRequest(BaseModel):
     def detect_video_source(self):
         hostname = urlsplit(str(self.video_url)).hostname.lower()
 
-        youtube_domains = (
-            "youtube.com",
-            "youtu.be",
-        )
+        youtube_domains = ("youtube.com", "youtu.be")
 
         is_youtube = any(
             hostname == domain or hostname.endswith("." + domain)
@@ -56,9 +55,7 @@ class ClipRequest(BaseModel):
             raise ValueError("A YouTube URL is required for this source")
 
         if self.source == "direct" and is_youtube:
-            raise ValueError(
-                "Use the youtube source for YouTube links"
-            )
+            raise ValueError("Use the youtube source for YouTube links")
 
         if self.source == "auto":
             self.source = "youtube" if is_youtube else "direct"
@@ -70,7 +67,7 @@ class ClipRequest(BaseModel):
 def home():
     return {
         "message": "ClipForge AI cloud API is running",
-        "version": "0.3.0",
+        "version": "0.4.0",
     }
 
 
@@ -79,15 +76,28 @@ def health():
     return {"status": "healthy"}
 
 
-@app.post("/clips")
+@app.post("/clips", status_code=202)
 def create_clip(request: ClipRequest):
+    try:
+        job = create_job(
+            video_url=str(request.video_url),
+            source=request.source,
+            duration=request.duration,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
     return {
-        "status": "validated",
-        "video_url": str(request.video_url),
-        "source": request.source,
-        "duration": request.duration,
-        "message": (
-            "Video request validated. "
-            "Cloud processing is not implemented yet."
-        ),
+        "message": "Video job created",
+        "job": job.model_dump(mode="json"),
     }
+
+
+@app.get("/jobs/{job_id}")
+def job_status(job_id: str):
+    job = get_job(job_id)
+
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return {"job": job.model_dump(mode="json")}
