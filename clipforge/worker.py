@@ -58,6 +58,54 @@ def get_job(job_id: str) -> VideoJob | None:
         return _jobs.get(job_id)
 
 
+def update_job_status(
+    job_id: str,
+    status: JobStatus,
+    result_url: str | None = None,
+    error: str | None = None,
+) -> VideoJob:
+    global _active_job_id
+
+    with _lock:
+        job = _jobs.get(job_id)
+
+        if job is None:
+            raise KeyError("Job not found")
+
+        allowed_transitions = {
+            JobStatus.QUEUED: [JobStatus.PROCESSING],
+            JobStatus.PROCESSING: [
+                JobStatus.COMPLETED,
+                JobStatus.FAILED,
+            ],
+        }
+
+        if status not in allowed_transitions.get(job.status, []):
+            raise ValueError("Invalid job status transition")
+
+        if status == JobStatus.COMPLETED and not result_url:
+            raise ValueError("Completed jobs require a result URL")
+
+        if status == JobStatus.FAILED and not error:
+            raise ValueError("Failed jobs require an error message")
+
+        updated = job.model_copy(
+            update={
+                "status": status,
+                "result_url": result_url,
+                "error": error,
+            }
+        )
+
+        _jobs[job_id] = updated
+
+        if status in (JobStatus.COMPLETED, JobStatus.FAILED):
+            if _active_job_id == job_id:
+                _active_job_id = None
+
+        return updated
+
+
 def process_video(job: VideoJob) -> VideoJob:
     raise NotImplementedError(
         "Video processing is not implemented yet."
