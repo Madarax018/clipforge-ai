@@ -7,7 +7,7 @@ client = TestClient(app)
 def test_home():
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json()["version"] == "0.2.0"
+    assert response.json()["version"] == "0.3.0"
 
 
 def test_health():
@@ -28,6 +28,7 @@ def test_valid_clip_request():
     assert response.status_code == 200
     assert response.json()["status"] == "validated"
     assert response.json()["duration"] == 45
+    assert response.json()["source"] == "direct"
 
 
 def test_reject_http_url():
@@ -60,6 +61,55 @@ def test_reject_long_duration():
         json={
             "video_url": "https://example.com/video.mp4",
             "duration": 200
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_detect_youtube_source():
+    response = client.post(
+        "/clips",
+        json={
+            "video_url": "https://www.youtube.com/watch?v=abc123"
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "youtube"
+
+
+def test_detect_direct_source():
+    response = client.post(
+        "/clips",
+        json={
+            "video_url": "https://example.com/video.mp4"
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "direct"
+
+
+def test_accept_explicit_youtube_source():
+    response = client.post(
+        "/clips",
+        json={
+            "video_url": "https://youtu.be/abc123",
+            "source": "youtube"
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "youtube"
+
+
+def test_reject_youtube_url_as_direct_source():
+    response = client.post(
+        "/clips",
+        json={
+            "video_url": "https://youtube.com/watch?v=abc123",
+            "source": "direct"
         }
     )
 
