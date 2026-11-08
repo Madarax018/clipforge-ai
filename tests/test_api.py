@@ -305,3 +305,22 @@ def test_new_job_allowed_after_failure():
     )
 
     assert second.status == JobStatus.QUEUED
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://localhost/video.mp4",
+        "https://127.0.0.1/video.mp4",
+        "https://192.168.1.10/video.mp4",
+        "https://10.0.0.5/video.mp4",
+        "https://router.local/video.mp4",
+    ],
+)
+def test_reject_private_or_local_hosts(url):
+    response = client.post(
+        "/clips",
+        json={"video_url": url},
+    )
+
+    assert response.status_code == 422
