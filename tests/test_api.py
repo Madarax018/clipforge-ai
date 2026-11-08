@@ -260,3 +260,48 @@ def test_failed_job_requires_error():
 
     with pytest.raises(ValueError):
         update_job_status(job.job_id, JobStatus.FAILED)
+
+def test_new_job_allowed_after_completion():
+    first = create_job(
+        "https://example.com/first.mp4",
+        "direct",
+        45,
+    )
+
+    update_job_status(first.job_id, JobStatus.PROCESSING)
+    update_job_status(
+        first.job_id,
+        JobStatus.COMPLETED,
+        result_url="https://example.com/result.mp4",
+    )
+
+    second = create_job(
+        "https://example.com/second.mp4",
+        "direct",
+        45,
+    )
+
+    assert second.status == JobStatus.QUEUED
+
+
+def test_new_job_allowed_after_failure():
+    first = create_job(
+        "https://example.com/first.mp4",
+        "direct",
+        45,
+    )
+
+    update_job_status(first.job_id, JobStatus.PROCESSING)
+    update_job_status(
+        first.job_id,
+        JobStatus.FAILED,
+        error="Test failure",
+    )
+
+    second = create_job(
+        "https://example.com/second.mp4",
+        "direct",
+        45,
+    )
+
+    assert second.status == JobStatus.QUEUED
