@@ -324,3 +324,21 @@ def test_reject_private_or_local_hosts(url):
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://[::1]/video.mp4",
+        "https://[::ffff:127.0.0.1]/video.mp4",
+        "https://169.254.169.254/latest/meta-data/",
+    ],
+)
+def test_reject_ipv6_and_link_local_hosts(url):
+    response = client.post(
+        "/clips",
+        json={"video_url": url},
+    )
+
+    assert response.status_code == 422
+
