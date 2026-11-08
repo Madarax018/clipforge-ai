@@ -1,4 +1,5 @@
-from typing import Literal
+
+import ipaddress
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException
@@ -12,6 +13,7 @@ from pydantic import (
 
 from clipforge.worker import create_job, get_job
 
+
 app = FastAPI(
     title="ClipForge AI",
     description="Cloud-based AI video clipping API",
@@ -19,10 +21,36 @@ app = FastAPI(
 )
 
 
+def validate_public_hostname(hostname: str) -> None:
+    hostname = hostname.lower().rstrip(".")
+
+    blocked_suffixes = (
+        ".localhost",
+        ".local",
+        ".internal",
+        ".home.arpa",
+    )
+
+    if (
+        hostname == "localhost"
+        or any(hostname.endswith(suffix) for suffix in blocked_suffixes)
+        or "." not in hostname
+    ):
+        raise ValueError("Local network hostnames are not allowed")
+
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        return
+
+    if not address.is_global:
+        raise ValueError("Private or non-public IP addresses are not allowed")
+
+
 class ClipRequest(BaseModel):
     video_url: HttpUrl
     duration: int = Field(default=45, ge=15, le=180)
-    source: Literal["auto", "youtube", "direct"] = "auto"
+    source: str = Field(default="auto")
 
     @field_validator("video_url")
     @classmethod
@@ -38,6 +66,15 @@ class ClipRequest(BaseModel):
         if parsed.username or parsed.password:
             raise ValueError("URLs containing credentials are not allowed")
 
+        validate_public_hostname(parsed.hostname)
+
+        return value
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, value):
+        if value not in ("auto", "youtube", "direct"):
+            raise ValueError("Source must be auto, youtube, or direct")
         return value
 
     @model_validator(mode="after")
